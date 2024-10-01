@@ -1,0 +1,19 @@
+{
+  "name": "ai-content-validator",
+  "version": "1.0.0",
+  "description": "Software Application \"AI-Powered Content Validator\"",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Binisha",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "ejs": "^3.1.10",
+    "express": "^4.21.0",
+    "openai": "^4.67.0",
+    "puppeteer": "^23.4.1"
+  }
+}

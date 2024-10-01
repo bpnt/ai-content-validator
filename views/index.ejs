@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Scraper</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        form {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        input[type="url"] {
+            width: 70%;
+            padding: 10px;
+            font-size: 16px;
+            border: 2px solid #ddd;
+            border-radius: 4px 0 0 4px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 0 4px 4px 0;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #result {
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+    <h1>Web Scraper</h1>
+    <form action="/scrape" method="POST">
+        <input type="url" id="url" name="url" placeholder="Enter URL to scrape" required>
+        <button type="submit">Scrape</button>
+    </form>
+    <div id="loading" style="display: none; text-align: center; margin-top: 20px;">
+        <p>Scraping in progress...</p>
+    </div>
+    <div id="result" style="display: none;"></div>
+
+    <script>
+        document.querySelector('form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const url = document.getElementById('url').value;
+            const loadingElement = document.getElementById('loading');
+            const resultElement = document.getElementById('result');
+
+            // Show loading indicator and hide result
+            loadingElement.style.display = 'block';
+            resultElement.style.display = 'none';
+
+            try {
+                const response = await fetch('/scrape', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ url }),
+                });
+                const data = await response.json();
+
+                // Hide loading indicator
+                loadingElement.style.display = 'none';
+
+                // Show result and update content
+                resultElement.style.display = 'block';
+                resultElement.innerText = data.content || data.error;
+            } catch (error) {
+                // Hide loading indicator
+                loadingElement.style.display = 'none';
+
+                // Show result with error message
+                resultElement.style.display = 'block';
+                resultElement.innerText = 'An error occurred while scraping the website.';
+            }
+        });
+    </script>
+</body>
+</html>
