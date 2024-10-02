@@ -1,67 +1,76 @@
+require('dotenv').config();
 const express = require('express');
-const puppeteer = require('puppeteer');
-const ejs = require('ejs');
-const path = require('path');
+const axios = require('axios');
+const cheerio = require('cheerio');
+const OpenAI = require('openai');
 
 const app = express();
-const port = 3000;
-
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// Set EJS as the view engine
 app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'views'));
 
-// Render the form
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
 app.get('/', (req, res) => {
   res.render('index');
 });
 
-// Launch the browser once when the server starts
-let browser;
-(async () => {
-  browser = await puppeteer.launch();
-})();
-
 app.post('/scrape', async (req, res) => {
-  const { url } = req.body;
-
-  if (!url || typeof url !== 'string') {
-    return res.status(400).json({ error: 'Valid URL is required' });
-  }
-
   try {
-    // Validate URL
-    new URL(url);
+    const { url } = req.body;
+    const response = await axios.get(url);
+    const $ = cheerio.load(response.data);
+    const content = $('body').text().trim();
 
-    const page = await browser.newPage();
-    await page.goto(url, { timeout: 30000 }); // 30 seconds timeout
-
-    // Extract the text content from the body
-    const content = await page.evaluate(() => {
-      return document.body.innerText;
-    });
-
-    await page.close();
-
+    // Send the scraped content back without AI analysis
     res.json({ content });
   } catch (error) {
-    console.error('Scraping error:', error);
-    if (error instanceof TypeError) {
-      res.status(400).json({ error: 'Invalid URL' });
-    } else {
-      res.status(500).json({ error: 'Failed to scrape the website' });
-    }
+    res.status(500).json({ error: error.message });
   }
 });
 
-// Close the browser when the server is shutting down
-process.on('SIGINT', async () => {
-  if (browser) await browser.close();
-  process.exit();
+app.post('/analyze', async (req, res) => {
+  try {
+    const { content } = req.body;
+    const analysis = await analyzeContent(content);
+    res.json({ analysis });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
-app.listen(port, () => {
-  console.log(`Web scraping server listening at http://localhost:${port}`);
-});
+async function analyzeContent(content) {
+  try {
+    const prompt = `Analyze the following text for grammar errors, spelling mistakes, and potential factual inaccuracies. Provide a summary of findings and suggestions for improvement:
+
+${content.substring(0, 1000)} // Limit to first 1000 characters to avoid token limits
+
+Please format your response as JSON with the following structure:
+{
+  "grammarErrors": [list of grammar errors],
+  "spellingMistakes": [list of spelling mistakes],
+  "factualInaccuracies": [list of potential factual inaccuracies],
+  "suggestions": [list of suggestions for improvement]
+}`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    return JSON.parse(completion.choices[0].message.content);
+  } catch (error) {
+    console.error('Error in AI analysis:', error);
+    if (error.response) {
+      console.error(error.response.status, error.response.data);
+      if (error.response.status === 429) {
+        return { error: 'API rate limit exceeded. Please try again later.' };
+      }
+    }
+    return { error: 'Failed to perform AI analysis. Please try again later.' };
+  }
+}
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

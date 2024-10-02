@@ -3,100 +3,248 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Scraper</title>
+    <title>Content Validator</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap');
+
         body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f0f0f0;
+            font-family: 'Poppins', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
+            background-size: 400% 400%;
+            animation: gradient 15s ease infinite;
+            padding: 2rem 0;
+            box-sizing: border-box;
+        }
+        .container {
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 2.5rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            max-width: 600px;
+            width: 100%;
+            margin: auto;
         }
         h1 {
             color: #333;
+            margin-bottom: 1.5rem;
             text-align: center;
+            font-weight: 600;
+            font-size: 2.5rem;
         }
-        form {
+        h2 {
+            color: #555;
+            margin-bottom: 0.75rem;
+            font-weight: 400;
+            font-size: 1.2rem;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #23a6d5;
+        }
+        .button-container {
             display: flex;
-            justify-content: center;
+            gap: 10px;
             margin-bottom: 20px;
         }
-        input[type="url"] {
-            width: 70%;
-            padding: 10px;
-            font-size: 16px;
-            border: 2px solid #ddd;
-            border-radius: 4px 0 0 4px;
-        }
         button {
-            padding: 10px 20px;
-            font-size: 16px;
-            background-color: #4CAF50;
+            background-color: #23a6d5;
             color: white;
+            padding: 0.75rem 1.5rem;
             border: none;
-            border-radius: 0 4px 4px 0;
+            border-radius: 8px;
             cursor: pointer;
+            transition: background-color 0.3s ease;
+            font-size: 1rem;
+            font-weight: 600;
+            flex: 1;
         }
         button:hover {
-            background-color: #45a049;
+            background-color: #1c8ab1;
         }
-        #result {
-            background-color: white;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            padding: 20px;
-            max-height: 400px;
+        #result, #analysis {
+            margin-top: 1.5rem;
+            padding: 1rem;
+            background-color: #f8f8f8;
+            border-radius: 8px;
+            max-height: 300px;
             overflow-y: auto;
-            white-space: pre-wrap;
-            word-wrap: break-word;
+            border: 2px solid #eee;
+            display: none;
+        }
+        .error {
+            color: #e74c3c;
+        }
+        .suggestion {
+            color: #2ecc71;
+        }
+        .bubbles {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            overflow: hidden;
+            top: 0;
+            left: 0;
+        }
+        .bubble {
+            position: absolute;
+            bottom: -100px;
+            width: 40px;
+            height: 40px;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            opacity: 0.5;
+            animation: rise 10s infinite ease-in;
+        }
+        @keyframes gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        @keyframes rise {
+            0% {
+                bottom: -100px;
+                transform: translateX(0);
+            }
+            100% {
+                bottom: 1080px;
+                transform: translateX(100px);
+            }
         }
     </style>
 </head>
 <body>
-    <h1>Web Scraper</h1>
-    <form action="/scrape" method="POST">
-        <input type="url" id="url" name="url" placeholder="Enter URL to scrape" required>
-        <button type="submit">Scrape</button>
-    </form>
-    <div id="loading" style="display: none; text-align: center; margin-top: 20px;">
-        <p>Scraping in progress...</p>
+    <div class="bubbles" id="bubbles-container">
+        <!-- Bubbles will be added here dynamically -->
     </div>
-    <div id="result" style="display: none;"></div>
+    <div class="container">
+        <h1>Content Validator</h1>
+        <input type="text" id="urlInput" placeholder="Enter URL to scrape">
+        <div class="button-container">
+            <button id="scrapeButton">Scrape</button>
+            <button id="analyzeButton">Analyze</button>
+        </div>
+        <div id="result"></div>
+        <div id="analysis"></div>
+    </div>
 
     <script>
-        document.querySelector('form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const url = document.getElementById('url').value;
-            const loadingElement = document.getElementById('loading');
-            const resultElement = document.getElementById('result');
+        // Bubble creation script
+        function createBubbles() {
+            const container = document.getElementById('bubbles-container');
+            for (let i = 0; i < 20; i++) {
+                const bubble = document.createElement('div');
+                bubble.className = 'bubble';
+                bubble.style.left = `${Math.random() * 100}%`;
+                bubble.style.animationDuration = `${5 + Math.random() * 10}s`;
+                bubble.style.animationDelay = `${Math.random() * 5}s`;
+                container.appendChild(bubble);
+            }
+        }
 
-            // Show loading indicator and hide result
-            loadingElement.style.display = 'block';
-            resultElement.style.display = 'none';
+        window.addEventListener('load', createBubbles);
+
+        const urlInput = document.getElementById('urlInput');
+        const scrapeButton = document.getElementById('scrapeButton');
+        const analyzeButton = document.getElementById('analyzeButton');
+        const resultDiv = document.getElementById('result');
+        const analysisDiv = document.getElementById('analysis');
+
+        let scrapedContent = '';
+
+        scrapeButton.addEventListener('click', async () => {
+            const url = urlInput.value;
+            if (!url) {
+                alert('Please enter a URL');
+                return;
+            }
 
             try {
                 const response = await fetch('/scrape', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ url }),
                 });
                 const data = await response.json();
-
-                // Hide loading indicator
-                loadingElement.style.display = 'none';
-
-                // Show result and update content
-                resultElement.style.display = 'block';
-                resultElement.innerText = data.content || data.error;
+                if (data.error) {
+                    resultDiv.innerHTML = `<h2>Error:</h2><p class="error">${data.error}</p>`;
+                } else {
+                    scrapedContent = data.content;
+                    resultDiv.innerHTML = '<h2>Scraped Content:</h2><p>' + scrapedContent + '</p>';
+                }
+                resultDiv.style.display = 'block';
+                analysisDiv.style.display = 'none';
             } catch (error) {
-                // Hide loading indicator
-                loadingElement.style.display = 'none';
+                resultDiv.innerHTML = `<h2>Error:</h2><p class="error">${error.message}</p>`;
+                resultDiv.style.display = 'block';
+                analysisDiv.style.display = 'none';
+            }
+        });
 
-                // Show result with error message
-                resultElement.style.display = 'block';
-                resultElement.innerText = 'An error occurred while scraping the website.';
+        analyzeButton.addEventListener('click', async () => {
+            if (!scrapedContent) {
+                alert('Please scrape content first');
+                return;
+            }
+
+            try {
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: scrapedContent }),
+                });
+                const data = await response.json();
+                if (data.error) {
+                    analysisDiv.innerHTML = `<h2>Error:</h2><p class="error">${data.error}</p>`;
+                } else {
+                    let analysisHTML = '<h2>Content Analysis:</h2>';
+                    const analysis = data.analysis;
+                    if (typeof analysis === 'object' && analysis !== null) {
+                        const hasContent = Object.values(analysis).some(value => 
+                            Array.isArray(value) && value.length > 0 || 
+                            typeof value === 'string' && value.trim() !== ''
+                        );
+
+                        if (!hasContent) {
+                            analysisHTML += '<p>No errors or suggestions found.</p>';
+                        } else {
+                            for (const [key, value] of Object.entries(analysis)) {
+                                if (Array.isArray(value) && value.length > 0) {
+                                    analysisHTML += `<h3>${key}:</h3><ul>`;
+                                    value.forEach(item => {
+                                        analysisHTML += `<li class="${key === 'suggestions' ? 'suggestion' : 'error'}">${item}</li>`;
+                                    });
+                                    analysisHTML += '</ul>';
+                                } else if (typeof value === 'string' && value.trim() !== '') {
+                                    analysisHTML += `<h3>${key}:</h3><p>${value}</p>`;
+                                }
+                            }
+                        }
+                    } else {
+                        analysisHTML += '<p>Invalid analysis data received.</p>';
+                    }
+                    analysisDiv.innerHTML = analysisHTML;
+                }
+                analysisDiv.style.display = 'block';
+                resultDiv.style.display = 'none';
+            } catch (error) {
+                analysisDiv.innerHTML = `<h2>Error:</h2><p class="error">${error.message}</p>`;
+                analysisDiv.style.display = 'block';
+                resultDiv.style.display = 'none';
             }
         });
     </script>
