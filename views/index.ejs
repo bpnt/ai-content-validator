@@ -75,7 +75,7 @@
         button:hover {
             background-color: #1c8ab1;
         }
-        #result, #analysis {
+        #result, #analysisResult {
             margin-top: 1.5rem;
             padding: 1rem;
             background-color: #f8f8f8;
@@ -84,6 +84,16 @@
             overflow-y: auto;
             border: 2px solid #eee;
             display: none;
+            position: relative; /* Added for loading indicator */
+        }
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.2rem;
+            color: #23a6d5;
+            display: none; /* Initially hidden */
         }
         .error {
             color: #e74c3c;
@@ -125,6 +135,33 @@
                 transform: translateX(100px);
             }
         }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            max-height: 300px;
+            overflow-y: auto;
+            background-color: #f9f9f9;
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+        }
+        #result h2 {
+            margin-top: 0;
+            color: #333;
+        }
+        #scrapedContent {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        #analysisResult {
+            display: none;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-top: 20px;
+            max-height: 300px; /* Ensure it doesn't overflow */
+            overflow-y: auto; /* Allow scrolling */
+        }
     </style>
 </head>
 <body>
@@ -136,10 +173,18 @@
         <input type="text" id="urlInput" placeholder="Enter URL to scrape">
         <div class="button-container">
             <button id="scrapeButton">Scrape</button>
-            <button id="analyzeButton">Analyze</button>
+            <button id="analyzeButton" style="display: none;">Analyze</button>
         </div>
-        <div id="result"></div>
-        <div id="analysis"></div>
+        <div id="result">
+            <h2>Scraped Content:</h2>
+            <div id="scrapedContent"></div>
+            <div class="loading" id="scrapeLoadingIndicator">LOADING...</div> <!-- Loading indicator for scraping -->
+        </div>
+        <div id="analysisResult">
+            <h2>Analysis Result</h2>
+            <pre id="resultContent"></pre>
+            <div class="loading" id="loadingIndicator">LOADING...</div> <!-- Loading indicator for analysis -->
+        </div>
     </div>
 
     <script>
@@ -162,7 +207,11 @@
         const scrapeButton = document.getElementById('scrapeButton');
         const analyzeButton = document.getElementById('analyzeButton');
         const resultDiv = document.getElementById('result');
-        const analysisDiv = document.getElementById('analysis');
+        const scrapedContentDiv = document.getElementById('scrapedContent');
+        const analysisResultDiv = document.getElementById('analysisResult');
+        const resultContentDiv = document.getElementById('resultContent');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const scrapeLoadingIndicator = document.getElementById('scrapeLoadingIndicator');
 
         let scrapedContent = '';
 
@@ -174,6 +223,8 @@
             }
 
             try {
+                scrapedContentDiv.textContent = ''; // Clear previous content
+                scrapeLoadingIndicator.style.display = 'block'; // Show loading indicator
                 const response = await fetch('/scrape', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -181,17 +232,17 @@
                 });
                 const data = await response.json();
                 if (data.error) {
-                    resultDiv.innerHTML = `<h2>Error:</h2><p class="error">${data.error}</p>`;
+                    scrapedContentDiv.textContent = `Error: ${data.error}`;
                 } else {
                     scrapedContent = data.content;
-                    resultDiv.innerHTML = '<h2>Scraped Content:</h2><p>' + scrapedContent + '</p>';
+                    scrapedContentDiv.textContent = scrapedContent;
+                    resultDiv.style.display = 'block';
+                    analyzeButton.style.display = 'block';
                 }
-                resultDiv.style.display = 'block';
-                analysisDiv.style.display = 'none';
             } catch (error) {
-                resultDiv.innerHTML = `<h2>Error:</h2><p class="error">${error.message}</p>`;
-                resultDiv.style.display = 'block';
-                analysisDiv.style.display = 'none';
+                scrapedContentDiv.textContent = `Error: ${error.message}`;
+            } finally {
+                scrapeLoadingIndicator.style.display = 'none'; // Hide loading indicator
             }
         });
 
@@ -202,49 +253,20 @@
             }
 
             try {
+                resultContentDiv.textContent = ''; // Clear previous results
+                loadingIndicator.style.display = 'block'; // Show loading indicator
                 const response = await fetch('/analyze', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ content: scrapedContent }),
                 });
                 const data = await response.json();
-                if (data.error) {
-                    analysisDiv.innerHTML = `<h2>Error:</h2><p class="error">${data.error}</p>`;
-                } else {
-                    let analysisHTML = '<h2>Content Analysis:</h2>';
-                    const analysis = data.analysis;
-                    if (typeof analysis === 'object' && analysis !== null) {
-                        const hasContent = Object.values(analysis).some(value => 
-                            Array.isArray(value) && value.length > 0 || 
-                            typeof value === 'string' && value.trim() !== ''
-                        );
-
-                        if (!hasContent) {
-                            analysisHTML += '<p>No errors or suggestions found.</p>';
-                        } else {
-                            for (const [key, value] of Object.entries(analysis)) {
-                                if (Array.isArray(value) && value.length > 0) {
-                                    analysisHTML += `<h3>${key}:</h3><ul>`;
-                                    value.forEach(item => {
-                                        analysisHTML += `<li class="${key === 'suggestions' ? 'suggestion' : 'error'}">${item}</li>`;
-                                    });
-                                    analysisHTML += '</ul>';
-                                } else if (typeof value === 'string' && value.trim() !== '') {
-                                    analysisHTML += `<h3>${key}:</h3><p>${value}</p>`;
-                                }
-                            }
-                        }
-                    } else {
-                        analysisHTML += '<p>Invalid analysis data received.</p>';
-                    }
-                    analysisDiv.innerHTML = analysisHTML;
-                }
-                analysisDiv.style.display = 'block';
-                resultDiv.style.display = 'none';
+                resultContentDiv.textContent = JSON.stringify(data, null, 2);
+                analysisResultDiv.style.display = 'block';
             } catch (error) {
-                analysisDiv.innerHTML = `<h2>Error:</h2><p class="error">${error.message}</p>`;
-                analysisDiv.style.display = 'block';
-                resultDiv.style.display = 'none';
+                resultContentDiv.textContent = `Error: ${error.message}`;
+            } finally {
+                loadingIndicator.style.display = 'none'; // Hide loading indicator
             }
         });
     </script>

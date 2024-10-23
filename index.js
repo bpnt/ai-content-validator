@@ -2,30 +2,30 @@ require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
-const OpenAI = require('openai');
+const { stripIndent } = require('common-tags');
 
 const app = express();
 app.use(express.json());
 app.set('view engine', 'ejs');
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
 
 app.get('/', (req, res) => {
   res.render('index');
 });
 
 app.post('/scrape', async (req, res) => {
+  console.log('Received scrape request');
   try {
     const { url } = req.body;
+    console.log('URL to scrape:', url);
     const response = await axios.get(url);
+    console.log('Fetched URL content');
     const $ = cheerio.load(response.data);
     const content = $('body').text().trim();
+    console.log('Scraped content length:', content.length);
 
-    // Send the scraped content back without AI analysis
     res.json({ content });
   } catch (error) {
+    console.error('Error in scrape request:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -42,34 +42,87 @@ app.post('/analyze', async (req, res) => {
 
 async function analyzeContent(content) {
   try {
-    const prompt = `Analyze the following text for grammar errors, spelling mistakes, and potential factual inaccuracies. Provide a summary of findings and suggestions for improvement:
+    // Convert to natural language and remove code
+    const naturalContent = convertToNaturalLanguage(content);
 
-${content.substring(0, 1000)} // Limit to first 1000 characters to avoid token limits
+    const prompt = stripIndent`
+      Analyze the following text for grammar errors, spelling mistakes, and potential factual inaccuracies. Provide a summary of findings and suggestions for improvement:
 
-Please format your response as JSON with the following structure:
-{
-  "grammarErrors": [list of grammar errors],
-  "spellingMistakes": [list of spelling mistakes],
-  "factualInaccuracies": [list of potential factual inaccuracies],
-  "suggestions": [list of suggestions for improvement]
-}`;
+      ${naturalContent.substring(0, 1500)} // Increased limit to 1500 characters
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [{ role: "user", content: prompt }],
-    });
+      Please format your response as JSON with the following structure:
+      {
+        "grammarErrors": [list of grammar errors],
+        "spellingMistakes": [list of spelling mistakes],
+        "factualInaccuracies": [list of potential factual inaccuracies],
+        "suggestions": [list of suggestions for improvement]
+      }
+    `;
 
-    return JSON.parse(completion.choices[0].message.content);
+    const response = await axios.post('https://api.anthropic.com/v1/complete', 
+      {
+        prompt: `Human: ${prompt}\n\nAssistant:`,
+        model: "claude-2",
+        max_tokens_to_sample: 1000,
+        temperature: 0.7,
+        stop_sequences: ["\n\nHuman:"]
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': process.env.CLAUDE_API_KEY,
+          'anthropic-version': '2023-06-01'
+        },
+      }
+    );
+
+    console.log('API Response:', response.data);
+
+    // Extract the JSON part from the response
+    const jsonResponse = response.data.completion.match(/{.*}/s);
+    if (jsonResponse) {
+      try {
+        return JSON.parse(jsonResponse[0]);
+      } catch (jsonError) {
+        console.error('Invalid JSON response:', jsonResponse[0]);
+        return { error: 'Invalid JSON response from API' };
+      }
+    } else {
+      console.error('No valid JSON found in response:', response.data.completion);
+      return { error: 'No valid JSON found in response' };
+    }
   } catch (error) {
     console.error('Error in AI analysis:', error);
     if (error.response) {
-      console.error(error.response.status, error.response.data);
-      if (error.response.status === 429) {
-        return { error: 'API rate limit exceeded. Please try again later.' };
-      }
+      console.error('Response data:', error.response.data);
+      console.error('Response status:', error.response.status);
+      console.error('Response headers:', error.response.headers);
     }
-    return { error: 'Failed to perform AI analysis. Please try again later.' };
+    return { error: 'Failed to perform AI analysis: ' + (error.response?.data?.error?.message || error.message) };
   }
+}
+
+function convertToNaturalLanguage(content) {
+  // Remove HTML tags
+  let text = content.replace(/<[^>]*>/g, '');
+
+  // Remove common programming language syntax
+  text = text.replace(/[{}()\[\]]/g, ' ');
+  text = text.replace(/;/g, '.');
+  text = text.replace(/\b(function|var|let|const|if|else|for|while|return)\b/g, '');
+
+  // Remove extra whitespace
+  text = text.replace(/\s+/g, ' ').trim();
+
+  // Convert common programming constructs to natural language
+  text = text.replace(/(\w+)\s*=\s*(.+?)(?=[;.]|$)/g, '$1 is $2');
+  text = text.replace(/(\w+)\s*\+=\s*(.+?)(?=[;.]|$)/g, '$1 is increased by $2');
+  text = text.replace(/(\w+)\s*-=\s*(.+?)(?=[;.]|$)/g, '$1 is decreased by $2');
+
+  // Remove any remaining code-like structures
+  text = text.replace(/[a-zA-Z_]\w*\s*\(.*?\)/g, '');
+
+  return text;
 }
 
 const PORT = process.env.PORT || 3000;
