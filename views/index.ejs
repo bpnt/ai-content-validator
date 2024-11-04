@@ -261,14 +261,70 @@
                     body: JSON.stringify({ content: scrapedContent }),
                 });
                 const data = await response.json();
-                resultContentDiv.textContent = JSON.stringify(data, null, 2);
-                analysisResultDiv.style.display = 'block';
+
+                // Check for errors in the response
+                if (data.error) {
+                    resultContentDiv.textContent = `Error: ${data.error}`;
+                } else {
+                    const analysisResult = formatAnalysisResult(data.analysis); // Format the analysis result
+                    resultContentDiv.textContent = analysisResult; // Display the formatted result
+                    analysisResultDiv.style.display = 'block';
+                }
             } catch (error) {
                 resultContentDiv.textContent = `Error: ${error.message}`;
             } finally {
                 loadingIndicator.style.display = 'none'; // Hide loading indicator
             }
         });
+
+        // Function to format the analysis result into natural language
+        function formatAnalysisResult(analysis) {
+            let result = 'Here are the results of your analysis:\n\n';
+
+            // Check for grammar errors
+            if (analysis.grammarErrors && analysis.grammarErrors.length > 0) {
+                result += 'You have the following grammar errors:\n' + analysis.grammarErrors.join('\n') + '\n\n';
+            } else {
+                result += 'Great! No grammar errors were found.\n\n';
+            }
+
+            // Check for spelling mistakes
+            if (analysis.spellingMistakes && analysis.spellingMistakes.length > 0) {
+                result += 'You have the following spelling mistakes:\n' + analysis.spellingMistakes.join('\n') + '\n\n';
+            } else {
+                result += 'Excellent! No spelling mistakes were found.\n\n';
+            }
+
+            // Check for factual inaccuracies
+            if (analysis.factualInaccuracies && analysis.factualInaccuracies.length > 0) {
+                result += 'There are some factual inaccuracies:\n' + analysis.factualInaccuracies.join('\n') + '\n\n';
+            } else {
+                result += 'Good job! No factual inaccuracies were found.\n\n';
+            }
+
+            // Check for suggestions
+            if (analysis.suggestions && analysis.suggestions.length > 0) {
+                result += 'Here are some suggestions for improvement:\n' + analysis.suggestions.join('\n') + '\n';
+            } else {
+                // Default suggestions if none are provided
+                result += 'Here are some suggestions for improvement:\n' +
+                          '1. Review your content for clarity and coherence.\n' +
+                          '2. Ensure that your arguments are well-supported with evidence.\n' +
+                          '3. Consider varying your sentence structure for better flow.\n' +
+                          '4. Proofread your content to catch any overlooked errors.\n';
+            }
+
+            // Final message if everything is fine
+            if (
+                (analysis.grammarErrors.length === 0) &&
+                (analysis.spellingMistakes.length === 0) &&
+                (analysis.factualInaccuracies.length === 0)
+            ) {
+                result += '\nYour content is well-written!';
+            }
+
+            return result;
+        }
     </script>
 </body>
 </html>

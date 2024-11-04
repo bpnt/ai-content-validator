@@ -6,6 +6,7 @@ const { stripIndent } = require('common-tags');
 
 const app = express();
 app.use(express.json());
+app.use(express.static('public')); // Serve static files from the 'public' directory
 app.set('view engine', 'ejs');
 
 app.get('/', (req, res) => {
@@ -42,7 +43,6 @@ app.post('/analyze', async (req, res) => {
 
 async function analyzeContent(content) {
   try {
-    // Convert to natural language and remove code
     const naturalContent = convertToNaturalLanguage(content);
 
     const prompt = stripIndent`
@@ -78,18 +78,28 @@ async function analyzeContent(content) {
 
     console.log('API Response:', response.data);
 
-    // Extract the JSON part from the response
-    const jsonResponse = response.data.completion.match(/{.*}/s);
-    if (jsonResponse) {
-      try {
-        return JSON.parse(jsonResponse[0]);
-      } catch (jsonError) {
-        console.error('Invalid JSON response:', jsonResponse[0]);
-        return { error: 'Invalid JSON response from API' };
-      }
-    } else {
-      console.error('No valid JSON found in response:', response.data.completion);
-      return { error: 'No valid JSON found in response' };
+    // Extract the completion part of the response
+    const jsonResponse = response.data.completion;
+
+    // Find the start of the JSON object
+    const jsonStartIndex = jsonResponse.indexOf('{');
+    const jsonEndIndex = jsonResponse.lastIndexOf('}');
+
+    // Check if we found valid JSON
+    if (jsonStartIndex === -1 || jsonEndIndex === -1) {
+      console.error('Invalid JSON response:', jsonResponse);
+      return { error: 'Invalid JSON response from API' };
+    }
+
+    // Extract the JSON string
+    const jsonString = jsonResponse.substring(jsonStartIndex, jsonEndIndex + 1); // Include the closing brace
+
+    try {
+      const analysis = JSON.parse(jsonString); // Parse the JSON response
+      return analysis; // Return the parsed analysis object
+    } catch (jsonError) {
+      console.error('Invalid JSON response:', jsonString);
+      return { error: 'Invalid JSON response from API' };
     }
   } catch (error) {
     console.error('Error in AI analysis:', error);
@@ -103,25 +113,15 @@ async function analyzeContent(content) {
 }
 
 function convertToNaturalLanguage(content) {
-  // Remove HTML tags
   let text = content.replace(/<[^>]*>/g, '');
-
-  // Remove common programming language syntax
   text = text.replace(/[{}()\[\]]/g, ' ');
   text = text.replace(/;/g, '.');
   text = text.replace(/\b(function|var|let|const|if|else|for|while|return)\b/g, '');
-
-  // Remove extra whitespace
   text = text.replace(/\s+/g, ' ').trim();
-
-  // Convert common programming constructs to natural language
   text = text.replace(/(\w+)\s*=\s*(.+?)(?=[;.]|$)/g, '$1 is $2');
   text = text.replace(/(\w+)\s*\+=\s*(.+?)(?=[;.]|$)/g, '$1 is increased by $2');
   text = text.replace(/(\w+)\s*-=\s*(.+?)(?=[;.]|$)/g, '$1 is decreased by $2');
-
-  // Remove any remaining code-like structures
   text = text.replace(/[a-zA-Z_]\w*\s*\(.*?\)/g, '');
-
   return text;
 }
 
